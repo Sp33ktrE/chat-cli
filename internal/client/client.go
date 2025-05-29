@@ -8,19 +8,35 @@ import (
 	"strings"
 )
 
-func Chat() {
+type Client struct {
+	name string
+	conn net.Conn
+}
+
+func New() (*Client, error) {
 	conn, err := net.Dial("tcp", ":5050")
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
 	}
-	defer conn.Close()
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println(">> Enter your name: ")
+	name, _ := reader.ReadString('\n')
+	name = strings.TrimSpace(name)
+	return &Client{
+		name: name,
+		conn: conn,
+	}, nil
+}
+
+func (client *Client) Chat() {
+	defer client.conn.Close()
 	for {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Println("Enter your message:")
+		fmt.Println(">> Enter your message: ")
 		input, _ := reader.ReadString('\n')
 		if strings.ToUpper(input) == "QUIT\n" {
 			break
 		}
-		conn.Write([]byte(input))
+		client.conn.Write([]byte(input))
 	}
 }
