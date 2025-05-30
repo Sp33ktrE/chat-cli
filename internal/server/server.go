@@ -20,6 +20,27 @@ func New(host string, port string) *Server {
 	}
 }
 
+func (server *Server) handleClient(ch chan bool, conn net.Conn) {
+	defer conn.Close()
+	{
+		conn.Write([]byte("ACCEPT\n"))
+		reader := bufio.NewReader(conn)
+		name, _ := reader.ReadString('\n')
+		name = strings.TrimSpace(name)
+		fmt.Printf("[%s] Connected\n", name)
+		conn.Write([]byte("OK\n"))
+		for {
+			msg, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("Connection closed or err: ", err)
+				break
+			}
+			fmt.Printf("[%s]: %s\n", name, msg)
+		}
+	}
+	<-ch
+}
+
 func (server *Server) Run() {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", server.host, server.port))
 	if err != nil {
@@ -35,28 +56,7 @@ func (server *Server) Run() {
 		}
 		select {
 		case sem <- true:
-			{
-				go func() {
-					defer conn.Close()
-					{
-						conn.Write([]byte("ACCEPT\n"))
-						reader := bufio.NewReader(conn)
-						name, _ := reader.ReadString('\n')
-						name = strings.TrimSpace(name)
-						fmt.Printf("[%s] Connected\n", name)
-						conn.Write([]byte("OK\n"))
-						for {
-							msg, err := reader.ReadString('\n')
-							if err != nil {
-								fmt.Println("Connection closed or err: ", err)
-								break
-							}
-							fmt.Printf("[%s]: %s\n", name, msg)
-						}
-					}
-					<-sem
-				}()
-			}
+			go server.handleClient(sem, conn)
 		default:
 			conn.Write([]byte("FULL\n"))
 			conn.Close()
