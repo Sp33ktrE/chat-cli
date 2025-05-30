@@ -25,23 +25,38 @@ func (server *Server) Run() {
 		log.Fatal(err)
 	}
 	fmt.Println("***Chat Server Started***")
+	const cap = 2
+	sem := make(chan bool, cap)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Println(err)
 		}
-		go func() {
-			fmt.Println("-Client Connected-")
-			defer conn.Close()
-			reader := bufio.NewReader(conn)
-			for {
-				msg, err := reader.ReadString('\n')
-				if err != nil {
-					fmt.Println("Connection closed or err: ", err)
-					break
-				}
-				fmt.Println("Message recieved: ", msg)
+		select {
+		case sem <- true:
+			{
+				go func() {
+					defer conn.Close()
+					{
+						conn.Write([]byte("ACCEPT\n"))
+						fmt.Println("Client connected")
+						reader := bufio.NewReader(conn)
+						for {
+							msg, err := reader.ReadString('\n')
+							if err != nil {
+								fmt.Println("Connection closed or err: ", err)
+								break
+							}
+							fmt.Println("Message recieved: ", msg)
+						}
+					}
+					<-sem
+				}()
 			}
-		}()
+		default:
+			conn.Write([]byte("FULL\n"))
+			conn.Close()
+		}
+
 	}
 }
