@@ -30,13 +30,21 @@ func New() (*Client, error) {
 
 func (client *Client) Chat() {
 	defer client.conn.Close()
-	for {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Println(">> Enter your message: ")
-		input, _ := reader.ReadString('\n')
-		if strings.ToUpper(input) == "QUIT\n" {
-			break
+	reader := bufio.NewReader(client.conn)
+	msg, err := reader.ReadString('\n')
+	if msg == "ACCEPT\n" {
+		for {
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Println(">> Enter your message: ")
+			input, _ := reader.ReadString('\n')
+			if strings.ToUpper(input) == "QUIT\n" {
+				break
+			}
+			client.conn.Write([]byte(input))
 		}
-		client.conn.Write([]byte(input))
+	} else if msg == "FULL\n" {
+		fmt.Println("SERVER IS FULL")
+	} else {
+		fmt.Println("An error connecting the server has occured: ", err)
 	}
 }
