@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 )
 
 type Server struct {
@@ -39,15 +40,18 @@ func (server *Server) Run() {
 					defer conn.Close()
 					{
 						conn.Write([]byte("ACCEPT\n"))
-						fmt.Println("Client connected")
 						reader := bufio.NewReader(conn)
+						name, _ := reader.ReadString('\n')
+						name = strings.TrimSpace(name)
+						fmt.Printf("[%s] Connected\n", name)
+						conn.Write([]byte("OK\n"))
 						for {
 							msg, err := reader.ReadString('\n')
 							if err != nil {
 								fmt.Println("Connection closed or err: ", err)
 								break
 							}
-							fmt.Println("Message recieved: ", msg)
+							fmt.Printf("[%s]: %s\n", name, msg)
 						}
 					}
 					<-sem
