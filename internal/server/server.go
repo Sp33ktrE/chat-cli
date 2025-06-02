@@ -9,14 +9,18 @@ import (
 )
 
 type Server struct {
-	host string
-	port string
+	host      string
+	port      string
+	broadcast chan string
+	clients   map[string]net.Conn
 }
 
 func New(host string, port string) *Server {
 	return &Server{
-		host: host,
-		port: port,
+		host:      host,
+		port:      port,
+		broadcast: make(chan string),
+		clients:   make(map[string]net.Conn),
 	}
 }
 
@@ -29,16 +33,29 @@ func (server *Server) handleClient(ch chan bool, conn net.Conn) {
 		name = strings.TrimSpace(name)
 		fmt.Printf("[%s] Connected\n", name)
 		conn.Write([]byte("OK\n"))
+		server.clients[name] = conn
 		for {
 			msg, err := reader.ReadString('\n')
 			if err != nil {
 				fmt.Println("Connection closed or err: ", err)
 				break
 			}
-			fmt.Printf("[%s]: %s\n", name, msg)
+			//fmt.Printf("[%s]: %s\n", name, msg)
+			server.broadcast <- msg
 		}
 	}
 	<-ch
+}
+
+func (server *Server) handleBroadcast() {
+	for {
+		msg := <-server.broadcast
+		fmt.Println(msg)
+		for _, conn := range server.clients {
+			conn.Write([]byte(msg + "\n"))
+		}
+		// TODO: i should add client map so i can broadcast to all their conns here!!
+	}
 }
 
 func (server *Server) Run() {
@@ -49,11 +66,13 @@ func (server *Server) Run() {
 	fmt.Println("***Chat Server Started***")
 	const cap = 2
 	sem := make(chan bool, cap)
+	go server.handleBroadcast()
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Println(err)
 		}
+
 		select {
 		case sem <- true:
 			go server.handleClient(sem, conn)
