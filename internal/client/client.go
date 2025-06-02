@@ -24,6 +24,17 @@ func New(name string, addr string) (*Client, error) {
 	}, nil
 }
 
+func (client *Client) handleReadMsg(reader *bufio.Reader) {
+	for {
+		msg, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Connection from the server closed")
+			break
+		}
+		fmt.Println(msg)
+	}
+}
+
 func (client *Client) Chat() {
 	defer client.conn.Close()
 	reader := bufio.NewReader(client.conn)
@@ -32,6 +43,7 @@ func (client *Client) Chat() {
 		client.conn.Write([]byte(client.name + "\n"))
 		msg, _ := reader.ReadString('\n')
 		if msg == "OK\n" {
+			go client.handleReadMsg(reader)
 			for {
 				reader := bufio.NewReader(os.Stdin)
 				fmt.Println(">> Enter your message: ")
