@@ -6,7 +6,12 @@ import (
 )
 
 const (
-	CmdNick = "NICK"
+	CmdNick    = "NICK"
+	CmdJoin    = "JOIN"
+	CmdPrivMsg = "PRIVMSG"
+	CmdQuit    = "QUIT"
+	CmdPing    = "PING"
+	CmdPong    = "PONG"
 )
 
 const (
@@ -24,7 +29,28 @@ type ProtocolMessage struct {
 	Trailing string
 }
 
-func ParsePMessage(line string) (ProtocolMessage, error) {
+func New(sender string, command string, params []string, trailing string) *ProtocolMessage {
+	return &ProtocolMessage{
+		Sender:   sender,
+		Command:  command,
+		Params:   params,
+		Trailing: trailing,
+	}
+}
+
+func (pmessage *ProtocolMessage) FormatPMessage() string {
+	params := strings.Join(pmessage.Params, " ")
+	message := fmt.Sprintf(" %s %s", pmessage.Command, params)
+	if pmessage.Sender != "" {
+		message = fmt.Sprintf(":%s%s", pmessage.Sender, message)
+	}
+	if pmessage.Trailing != "" {
+		message = fmt.Sprintf("%s:%s", message, pmessage.Trailing)
+	}
+	return message + "\n"
+}
+
+func ParsePMessage(line string) (*ProtocolMessage, error) {
 	var fullCmd []string
 	fullCmdSender := ""
 
@@ -36,15 +62,7 @@ func ParsePMessage(line string) (ProtocolMessage, error) {
 		fullCmdSender, line, _ = strings.Cut(line, " ")
 	}
 	fullCmd = strings.Split(line, " ")
-	return ProtocolMessage{
-		Sender:   fullCmdSender,
-		Command:  fullCmd[0],
-		Params:   fullCmd[1:],
-		Trailing: fullCmdMsg,
-	}, nil
-}
-
-func (pmessage *ProtocolMessage) FormatPMessage() string {
-	params := strings.Join(pmessage.Params, " ")
-	return fmt.Sprintf(":%s %s %s:%s\n", pmessage.Sender, pmessage.Command, params, pmessage.Trailing)
+	return New(
+		fullCmdSender, fullCmd[0], fullCmd[1:], fullCmdMsg,
+	), nil
 }
