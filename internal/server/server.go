@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strings"
+
+	"github.com/Sp33ktrE/chat-cli/pkg/protocol"
 )
 
 type Server struct {
@@ -27,13 +28,15 @@ func New(host string, port string) *Server {
 func (server *Server) handleClient(ch chan bool, conn net.Conn) {
 	defer conn.Close()
 	{
-		conn.Write([]byte("ACCEPT\n"))
 		reader := bufio.NewReader(conn)
-		name, _ := reader.ReadString('\n')
-		name = strings.TrimSpace(name)
-		fmt.Printf("[%s] Connected\n", name)
-		conn.Write([]byte("OK\n"))
-		server.clients[name] = conn
+		clientNickCommand, _ := reader.ReadString('\n')
+		pMessage, _ := protocol.ParsePMessage(clientNickCommand)
+		clientName := pMessage.Params[0]
+		fmt.Println(clientName)
+		fmt.Printf("[%s] Connected\n", clientName)
+		acceptMessage := protocol.New("server", protocol.RplWelcome, []string{}, "Connected to CLI chat, welcome!!")
+		conn.Write([]byte(acceptMessage.FormatPMessage()))
+		server.clients[clientName] = conn
 		for {
 			msg, err := reader.ReadString('\n')
 			if err != nil {
