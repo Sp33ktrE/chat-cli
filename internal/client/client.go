@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/Sp33ktrE/chat-cli/pkg/protocol"
 )
@@ -27,14 +28,43 @@ func New(name string, addr string) (*Client, error) {
 	}, nil
 }
 
-func (client *Client) handleReadMsg(reader *bufio.Reader) {
+func (client *Client) readMessage(reader *bufio.Reader, stopCh chan struct{}, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
-		msg, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Connection from the server closed")
-			break
+		select {
+		case <-stopCh:
+			fmt.Println("Received error, stop signal")
+			return
+		default:
+			msg, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("Connection from the server closed")
+				close(stopCh)
+				return
+			}
+			fmt.Println(msg)
 		}
-		fmt.Println(msg)
+	}
+}
+
+func (client *Client) sendMessage(stopCh chan struct{}, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case <-stopCh:
+			fmt.Println("Received error, stop signal")
+			return
+		default:
+			//os.Stdin read blocks even if we receive an error from another goroutine, fixable but needs some adjsuments
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Println(">> Enter your message: ")
+			input, _ := reader.ReadString('\n')
+			if strings.ToUpper(input) == "QUIT\n" {
+				close(stopCh)
+				return
+			}
+			client.conn.Write([]byte(input))
+		}
 	}
 }
 
@@ -48,19 +78,16 @@ func (client *Client) Chat() {
 		log.Fatal(err)
 	}
 	if msgParsed.Command == "001" {
+		const grs = 2
+		var wg sync.WaitGroup
+		wg.Add(grs)
+		stopCh := make(chan struct{})
 		fmt.Println(msgParsed.Trailing)
-		go client.handleReadMsg(reader)
-		for {
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Println(">> Enter your message: ")
-			input, _ := reader.ReadString('\n')
-			if strings.ToUpper(input) == "QUIT\n" {
-				break
-			}
-			client.conn.Write([]byte(input))
-		}
-	} else if msg == "FULL\n" {
-		fmt.Println("SERVER IS FULL")
+		go client.readMessage(reader, stopCh, &wg)
+		go client.sendMessage(stopCh, &wg)
+		wg.Wait()
+	} else if msgParsed.Command == "401" {
+		fmt.Print(msgParsed.Trailing)
 	} else {
 		fmt.Println("An error connecting the server has occured: ", err)
 	}
