@@ -30,9 +30,13 @@ func (server *Server) handleClient(ch chan bool, conn net.Conn) {
 	{
 		reader := bufio.NewReader(conn)
 		clientNickCommand, _ := reader.ReadString('\n')
-		pMessage, _ := protocol.ParsePMessage(clientNickCommand)
+		fmt.Println(clientNickCommand)
+		pMessage, err := protocol.ParsePMessage(clientNickCommand)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		clientName := pMessage.Params[0]
-		fmt.Println(clientName)
 		fmt.Printf("[%s] Connected\n", clientName)
 		acceptMessage := protocol.New("server", protocol.RplWelcome, []string{}, "Connected to CLI chat, welcome!!")
 		conn.Write([]byte(acceptMessage.FormatPMessage()))
@@ -80,7 +84,8 @@ func (server *Server) Run() {
 		case sem <- true:
 			go server.handleClient(sem, conn)
 		default:
-			conn.Write([]byte("FULL\n"))
+			fullErrMessage := protocol.New("server", protocol.ErrServerFull, []string{}, "Server is full, try again later!!")
+			conn.Write([]byte(fullErrMessage.FormatPMessage()))
 			conn.Close()
 		}
 
