@@ -33,16 +33,16 @@ func (client *Client) readMessage(reader *bufio.Reader, stopCh chan struct{}, wg
 	for {
 		select {
 		case <-stopCh:
-			fmt.Println("Received error, stop signal")
+			fmt.Println("Connection from the server closed")
 			return
 		default:
-			msg, err := reader.ReadString('\n')
+			message, err := reader.ReadString('\n')
 			if err != nil {
 				fmt.Println("Connection from the server closed")
 				close(stopCh)
 				return
 			}
-			fmt.Println(msg)
+			fmt.Println(message)
 		}
 	}
 }
@@ -52,7 +52,7 @@ func (client *Client) sendMessage(stopCh chan struct{}, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-stopCh:
-			fmt.Println("Received error, stop signal")
+			fmt.Println("Connection from the server closed")
 			return
 		default:
 			//os.Stdin read blocks even if we receive an error from another goroutine, fixable but needs some adjsuments
@@ -68,27 +68,33 @@ func (client *Client) sendMessage(stopCh chan struct{}, wg *sync.WaitGroup) {
 	}
 }
 
-func (client *Client) Chat() {
+func (client *Client) Chat(reader *bufio.Reader) {
+	const grs = 2
+	var wg sync.WaitGroup
+	wg.Add(grs)
+	stopCh := make(chan struct{})
+	go client.readMessage(reader, stopCh, &wg)
+	go client.sendMessage(stopCh, &wg)
+	wg.Wait()
+}
+
+func (client *Client) Start() {
 	defer client.conn.Close()
+	// Init server handshake
 	client.nickCommand()
 	reader := bufio.NewReader(client.conn)
-	msg, _ := reader.ReadString('\n')
-	msgParsed, err := protocol.ParsePMessage(msg)
+	serverReply, _ := reader.ReadString('\n')
+	serverReplyParsed, err := protocol.ParsePMessage(serverReply)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error parsing server response: ", err)
 	}
-	if msgParsed.Command == "001" {
-		const grs = 2
-		var wg sync.WaitGroup
-		wg.Add(grs)
-		stopCh := make(chan struct{})
-		fmt.Println(msgParsed.Trailing)
-		go client.readMessage(reader, stopCh, &wg)
-		go client.sendMessage(stopCh, &wg)
-		wg.Wait()
-	} else if msgParsed.Command == "401" {
-		fmt.Print(msgParsed.Trailing)
-	} else {
-		fmt.Println("An error connecting the server has occured: ", err)
+	switch serverReplyParsed.Command {
+	case "001":
+		fmt.Print(serverReplyParsed.Trailing)
+		client.Chat(reader)
+	case "401":
+		fmt.Println(serverReplyParsed.Trailing)
+	default:
+		fmt.Println("Error connecting to the server")
 	}
 }
