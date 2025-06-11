@@ -79,7 +79,6 @@ func (server *Server) Run() {
 		if err != nil {
 			log.Println(err)
 		}
-
 		select {
 		case sem <- true:
 			go server.handleClient(sem, conn)
@@ -88,6 +87,5 @@ func (server *Server) Run() {
 			conn.Write([]byte(fullErrMessage.FormatPMessage()))
 			conn.Close()
 		}
-
 	}
 }
